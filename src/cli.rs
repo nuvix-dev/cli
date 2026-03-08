@@ -21,6 +21,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: SelfHostCommand,
     },
+    /// Manage global project profiles
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -33,6 +38,16 @@ pub enum SelfHostCommand {
     Down(SelfHostDownArgs),
     /// Show current self-host status
     Status(SelfHostStatusArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProjectCommand {
+    /// Set API and Console URLs for a project profile
+    SetUrls(ProjectSetUrlsArgs),
+    /// Set current active project profile
+    Use(ProjectUseArgs),
+    /// Show profiles or current profile details
+    Show(ProjectShowArgs),
 }
 
 #[derive(Debug, Args)]
@@ -68,13 +83,16 @@ pub struct SelfHostInitArgs {
     pub host: Option<String>,
 
     #[arg(long)]
-    pub console_url: Option<String>,
+    pub api_port: Option<u16>,
 
     #[arg(long)]
-    pub api_endpoint: Option<String>,
+    pub console_api_port: Option<u16>,
 
     #[arg(long)]
-    pub console_api_endpoint: Option<String>,
+    pub console_port: Option<u16>,
+
+    #[arg(long)]
+    pub database_port: Option<u16>,
 
     #[arg(long)]
     pub admin_email: Option<String>,
@@ -124,4 +142,30 @@ pub struct SelfHostStatusArgs {
     /// Target project id from self-host project dictionary
     #[arg(long)]
     pub project_id: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ProjectSetUrlsArgs {
+    #[arg(long)]
+    pub project_id: String,
+    #[arg(long)]
+    pub api_url: String,
+    #[arg(long)]
+    pub console_api_url: String,
+    #[arg(long)]
+    pub console_url: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ProjectUseArgs {
+    #[arg(long)]
+    pub project_id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ProjectShowArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub list: bool,
 }

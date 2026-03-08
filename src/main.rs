@@ -1,11 +1,12 @@
 mod cli;
 mod commands;
 mod config;
+mod global_config;
 mod state;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands, SelfHostCommand};
+use cli::{Cli, Commands, ProjectCommand, SelfHostCommand};
 use std::env;
 use std::path::PathBuf;
 
@@ -26,6 +27,11 @@ fn run() -> Result<()> {
             SelfHostCommand::Up(args) => commands::self_host::up(&project_dir, args),
             SelfHostCommand::Down(args) => commands::self_host::down(&project_dir, args),
             SelfHostCommand::Status(args) => commands::self_host::status(&project_dir, args),
+        },
+        Commands::Project { command } => match command {
+            ProjectCommand::SetUrls(args) => commands::project::set_urls(args),
+            ProjectCommand::Use(args) => commands::project::use_project(args),
+            ProjectCommand::Show(args) => commands::project::show(args),
         },
     }
 }

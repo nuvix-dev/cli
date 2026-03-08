@@ -1,12 +1,14 @@
 use crate::cli::{SelfHostDownArgs, SelfHostInitArgs, SelfHostStatusArgs, SelfHostUpArgs};
 use crate::config::{ProjectConfig, SelfHostProjectSection, SelfHostSection};
+use crate::global_config::{GlobalConfig, GlobalProjectProfile};
 use crate::state::CliState;
 use anyhow::{Context, Result, bail};
 use dialoguer::{Confirm, Input, Password, theme::ColorfulTheme};
 use rand::Rng;
 use rand::distr::Alphanumeric;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -14,6 +16,10 @@ const DEFAULT_DOCKER_DIR: &str = "docker";
 const DEFAULT_ENV_FILE_NAME: &str = ".env";
 const DEFAULT_EXAMPLE_FILE_NAME: &str = ".env.example";
 const DEFAULT_DOCKER_REPO: &str = "https://github.com/Nuvix-dev/docker";
+const DEFAULT_API_PORT: u16 = 4000;
+const DEFAULT_CONSOLE_API_PORT: u16 = 4100;
+const DEFAULT_CONSOLE_PORT: u16 = 3000;
+const DEFAULT_DATABASE_PORT: u16 = 5432;
 
 pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
     let mut cfg = ProjectConfig::load_or_new(project_dir)?;
@@ -101,6 +107,7 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
     self_host.env_file = None;
 
     cfg.save_to(project_dir, true)?;
+    register_global_project_profile(&project_id, &docker_dir, &env_file, &env_values)?;
 
     let mut state = CliState::load_or_default(project_dir)?;
     state.local_running = false;
@@ -110,6 +117,19 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
     println!("Project id: {}", project_id);
     println!("Docker directory: {}", docker_dir.display());
     println!("Env file: {}", env_file.display());
+    println!(
+        "Ports => api: {}, console-api: {}, console: {}, db: {}",
+        env_values["NUVIX_API_PORT"],
+        env_values["NUVIX_CONSOLE_API_PORT"],
+        env_values["NUVIX_CONSOLE_PORT"],
+        env_values["NUVIX_DATABASE_PORT"]
+    );
+    println!("API endpoint: {}", env_values["NUVIX_API_ENDPOINT"]);
+    println!(
+        "Console API endpoint: {}",
+        env_values["NUVIX_CONSOLE_API_ENDPOINT"]
+    );
+    println!("Console URL: {}", env_values["NUVIX_CONSOLE_URL"]);
     println!("Next: nuvix self-host up --project-id {}", project_id);
 
     Ok(())
@@ -270,10 +290,11 @@ fn env_values_from_non_interactive(
         "--project-id",
     )?;
     let host = required(args.host.clone(), "--host")?;
-    let console_url = required(args.console_url.clone(), "--console-url")?;
-    let api_endpoint = required(args.api_endpoint.clone(), "--api-endpoint")?;
-    let console_api_endpoint =
-        required(args.console_api_endpoint.clone(), "--console-api-endpoint")?;
+    let api_port = args.api_port.unwrap_or(DEFAULT_API_PORT);
+    let console_api_port = args.console_api_port.unwrap_or(DEFAULT_CONSOLE_API_PORT);
+    let console_port = args.console_port.unwrap_or(DEFAULT_CONSOLE_PORT);
+    let database_port = args.database_port.unwrap_or(DEFAULT_DATABASE_PORT);
+    validate_unique_ports([api_port, console_api_port, console_port, database_port])?;
     let admin_email = required(args.admin_email.clone(), "--admin-email")?;
 
     let db_password = required(args.database_password.clone(), "--database-password")?;
@@ -285,13 +306,30 @@ fn env_values_from_non_interactive(
     let mut vars = base_defaults();
     vars.insert("NUVIX_PROJECT_ID".to_string(), project_id);
     vars.insert("NUVIX_HOST".to_string(), host);
-    vars.insert("NUVIX_CONSOLE_URL".to_string(), console_url);
-    vars.insert("NUVIX_API_ENDPOINT".to_string(), api_endpoint);
+    vars.insert("NUVIX_API_PORT".to_string(), api_port.to_string());
+    vars.insert(
+        "NUVIX_CONSOLE_API_PORT".to_string(),
+        console_api_port.to_string(),
+    );
+    vars.insert("NUVIX_CONSOLE_PORT".to_string(), console_port.to_string());
+    vars.insert("NUVIX_DATABASE_PORT".to_string(), database_port.to_string());
+    vars.insert("NUVIX_ADMIN_EMAIL".to_string(), admin_email);
+    vars.insert(
+        "NUVIX_CONSOLE_URL".to_string(),
+        format!("http://{}:{}", vars["NUVIX_HOST"], console_port),
+    );
+    vars.insert(
+        "NUVIX_API_ENDPOINT".to_string(),
+        format!("http://{}:{}/v1", vars["NUVIX_HOST"], api_port),
+    );
     vars.insert(
         "NUVIX_CONSOLE_API_ENDPOINT".to_string(),
-        console_api_endpoint,
+        format!("http://{}:{}", vars["NUVIX_HOST"], console_api_port),
     );
-    vars.insert("NUVIX_ADMIN_EMAIL".to_string(), admin_email);
+    vars.insert(
+        "NUVIX_CORS_ORIGIN".to_string(),
+        vars["NUVIX_CONSOLE_URL"].clone(),
+    );
 
     vars.insert("NUVIX_DATABASE_PASSWORD".to_string(), db_password);
     vars.insert("NUVIX_ADMIN_PASSWORD".to_string(), admin_password);
@@ -303,7 +341,7 @@ fn env_values_from_non_interactive(
         "NUVIX_REDIS_HOST".to_string(),
         args.redis_host
             .clone()
-            .unwrap_or_else(|| "localhost".to_string()),
+            .unwrap_or_else(|| "redis".to_string()),
     );
     vars.insert(
         "NUVIX_REDIS_PORT".to_string(),
@@ -333,32 +371,46 @@ fn env_values_from_interactive(
         .default(args.host.clone().unwrap_or_else(|| "localhost".to_string()))
         .interact_text()?;
 
-    let console_url: String = Input::with_theme(&theme)
-        .with_prompt("NUVIX_CONSOLE_URL")
-        .default(
-            args.console_url
-                .clone()
-                .unwrap_or_else(|| "http://localhost:3000".to_string()),
-        )
+    let mut reserved_ports = HashSet::new();
+    let api_port_default = choose_default_port(
+        args.api_port.unwrap_or(DEFAULT_API_PORT),
+        &mut reserved_ports,
+    );
+    let api_port: u16 = Input::with_theme(&theme)
+        .with_prompt("NUVIX_API_PORT")
+        .default(api_port_default)
         .interact_text()?;
+    reserved_ports.insert(api_port);
 
-    let api_endpoint: String = Input::with_theme(&theme)
-        .with_prompt("NUVIX_API_ENDPOINT")
-        .default(
-            args.api_endpoint
-                .clone()
-                .unwrap_or_else(|| "http://localhost:4000/v1".to_string()),
-        )
+    let console_api_port_default = choose_default_port(
+        args.console_api_port.unwrap_or(DEFAULT_CONSOLE_API_PORT),
+        &mut reserved_ports,
+    );
+    let console_api_port: u16 = Input::with_theme(&theme)
+        .with_prompt("NUVIX_CONSOLE_API_PORT")
+        .default(console_api_port_default)
         .interact_text()?;
+    reserved_ports.insert(console_api_port);
 
-    let console_api_endpoint: String = Input::with_theme(&theme)
-        .with_prompt("NUVIX_CONSOLE_API_ENDPOINT")
-        .default(
-            args.console_api_endpoint
-                .clone()
-                .unwrap_or_else(|| "http://localhost:4100".to_string()),
-        )
+    let console_port_default = choose_default_port(
+        args.console_port.unwrap_or(DEFAULT_CONSOLE_PORT),
+        &mut reserved_ports,
+    );
+    let console_port: u16 = Input::with_theme(&theme)
+        .with_prompt("NUVIX_CONSOLE_PORT")
+        .default(console_port_default)
         .interact_text()?;
+    reserved_ports.insert(console_port);
+
+    let database_port_default = choose_default_port(
+        args.database_port.unwrap_or(DEFAULT_DATABASE_PORT),
+        &mut reserved_ports,
+    );
+    let database_port: u16 = Input::with_theme(&theme)
+        .with_prompt("NUVIX_DATABASE_PORT")
+        .default(database_port_default)
+        .interact_text()?;
+    validate_unique_ports([api_port, console_api_port, console_port, database_port])?;
 
     let admin_email: String = Input::with_theme(&theme)
         .with_prompt("NUVIX_ADMIN_EMAIL")
@@ -412,11 +464,28 @@ fn env_values_from_interactive(
     let mut vars = base_defaults();
     vars.insert("NUVIX_PROJECT_ID".to_string(), project_id);
     vars.insert("NUVIX_HOST".to_string(), nuvix_host);
-    vars.insert("NUVIX_CONSOLE_URL".to_string(), console_url);
-    vars.insert("NUVIX_API_ENDPOINT".to_string(), api_endpoint);
+    vars.insert("NUVIX_API_PORT".to_string(), api_port.to_string());
+    vars.insert(
+        "NUVIX_CONSOLE_API_PORT".to_string(),
+        console_api_port.to_string(),
+    );
+    vars.insert("NUVIX_CONSOLE_PORT".to_string(), console_port.to_string());
+    vars.insert("NUVIX_DATABASE_PORT".to_string(), database_port.to_string());
+    vars.insert(
+        "NUVIX_CONSOLE_URL".to_string(),
+        format!("http://{}:{}", vars["NUVIX_HOST"], console_port),
+    );
+    vars.insert(
+        "NUVIX_API_ENDPOINT".to_string(),
+        format!("http://{}:{}/v1", vars["NUVIX_HOST"], api_port),
+    );
     vars.insert(
         "NUVIX_CONSOLE_API_ENDPOINT".to_string(),
-        console_api_endpoint,
+        format!("http://{}:{}", vars["NUVIX_HOST"], console_api_port),
+    );
+    vars.insert(
+        "NUVIX_CORS_ORIGIN".to_string(),
+        vars["NUVIX_CONSOLE_URL"].clone(),
     );
     vars.insert("NUVIX_ADMIN_EMAIL".to_string(), admin_email);
     vars.insert("NUVIX_ADMIN_PASSWORD".to_string(), admin_password);
@@ -472,7 +541,7 @@ fn base_defaults() -> BTreeMap<String, String> {
         "team@localhost.test".to_string(),
     );
     vars.insert("NUVIX_EMAIL_SECURITY".to_string(), "".to_string());
-    vars.insert("NUVIX_REDIS_HOST".to_string(), "localhost".to_string());
+    vars.insert("NUVIX_REDIS_HOST".to_string(), "redis".to_string());
     vars.insert("NUVIX_REDIS_PORT".to_string(), "6379".to_string());
     vars.insert("NUVIX_REDIS_USER".to_string(), "default".to_string());
     vars.insert("NUVIX_REDIS_DB".to_string(), "0".to_string());
@@ -629,6 +698,36 @@ fn required(value: Option<String>, flag: &str) -> Result<String> {
     value.with_context(|| format!("missing required value for {flag} in --non-interactive mode"))
 }
 
+fn validate_unique_ports<const N: usize>(ports: [u16; N]) -> Result<()> {
+    let mut seen = HashSet::new();
+    for port in ports {
+        if !seen.insert(port) {
+            bail!(
+                "port conflict detected: port {} is used more than once",
+                port
+            );
+        }
+    }
+    Ok(())
+}
+
+fn choose_default_port(preferred: u16, reserved: &mut HashSet<u16>) -> u16 {
+    let mut candidate = preferred;
+    loop {
+        if !reserved.contains(&candidate) && is_port_available(candidate) {
+            return candidate;
+        }
+        candidate = candidate.saturating_add(1);
+        if candidate == 0 {
+            return preferred;
+        }
+    }
+}
+
+fn is_port_available(port: u16) -> bool {
+    TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
 fn resolve_path(project_dir: &Path, path: PathBuf) -> PathBuf {
     if path.is_absolute() {
         path
@@ -695,6 +794,28 @@ fn pull_docker_repo_if_git(docker_dir: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn register_global_project_profile(
+    project_id: &str,
+    docker_dir: &Path,
+    env_file: &Path,
+    env_values: &BTreeMap<String, String>,
+) -> Result<()> {
+    let mut global = GlobalConfig::load_or_default()?;
+    let profile = global
+        .projects
+        .entry(project_id.to_string())
+        .or_insert_with(GlobalProjectProfile::default);
+
+    profile.api_url = env_values.get("NUVIX_API_ENDPOINT").cloned();
+    profile.console_api_url = env_values.get("NUVIX_CONSOLE_API_ENDPOINT").cloned();
+    profile.console_url = env_values.get("NUVIX_CONSOLE_URL").cloned();
+    profile.self_host_docker_dir = Some(docker_dir.to_path_buf());
+    profile.self_host_env_file = Some(env_file.to_path_buf());
+
+    global.current_project_id = Some(project_id.to_string());
+    global.save()
 }
 
 fn generate_secret() -> String {
