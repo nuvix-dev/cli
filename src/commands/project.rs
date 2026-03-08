@@ -30,7 +30,7 @@ pub fn use_project(args: ProjectUseArgs) -> Result<()> {
     let mut global = GlobalConfig::load_or_default()?;
     if !global.projects.contains_key(&args.project_id) {
         bail!(
-            "project profile '{}' not found. Create it with `nuvix project set-urls` or `nuvix self-host init`.",
+            "project profile '{}' not found. Create it with `nuvix project set-urls` or `nuvix local init`.",
             args.project_id
         );
     }

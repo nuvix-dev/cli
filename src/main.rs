@@ -8,7 +8,7 @@ mod state;
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    AuthCommand, Cli, Commands, GenCommand, MigrationCommand, ProjectCommand, SelfHostCommand,
+    AuthCommand, Cli, Commands, GenCommand, LocalCommand, MigrationCommand, ProjectCommand,
 };
 use std::env;
 use std::path::PathBuf;
@@ -26,11 +26,11 @@ fn run() -> Result<()> {
 
     match cli.command {
         Commands::Init(args) => commands::init_project::run(&project_dir, args),
-        Commands::SelfHost { command } => match command {
-            SelfHostCommand::Init(args) => commands::self_host::init(&project_dir, args),
-            SelfHostCommand::Up(args) => commands::self_host::up(&project_dir, args),
-            SelfHostCommand::Down(args) => commands::self_host::down(&project_dir, args),
-            SelfHostCommand::Status(args) => commands::self_host::status(&project_dir, args),
+        Commands::Local { command } => match command {
+            LocalCommand::Init(args) => commands::self_host::init(&project_dir, args),
+            LocalCommand::Up(args) => commands::self_host::up(&project_dir, args),
+            LocalCommand::Down(args) => commands::self_host::down(&project_dir, args),
+            LocalCommand::Status(args) => commands::self_host::status(&project_dir, args),
         },
         Commands::Project { command } => match command {
             ProjectCommand::SetUrls(args) => commands::project::set_urls(args),

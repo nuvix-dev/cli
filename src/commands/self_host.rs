@@ -130,7 +130,7 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
         env_values["NUVIX_CONSOLE_API_ENDPOINT"]
     );
     println!("Console URL: {}", env_values["NUVIX_CONSOLE_URL"]);
-    println!("Next: nuvix self-host up --project-id {}", project_id);
+    println!("Next: nuvix local up --project-id {}", project_id);
 
     Ok(())
 }
@@ -245,7 +245,7 @@ fn resolve_project_entry(
     let self_host = cfg
         .self_host
         .as_ref()
-        .context("self-host is not initialized. Run: nuvix self-host init")?;
+        .context("local is not initialized. Run: nuvix local init")?;
 
     if let Some(project_id) = requested_project_id {
         if let Some(project) = self_host.projects.get(project_id) {
@@ -276,7 +276,7 @@ fn resolve_project_entry(
         ));
     }
 
-    bail!("multiple self-host projects found; pass --project-id")
+    bail!("multiple local projects found; pass --project-id")
 }
 
 fn env_values_from_non_interactive(

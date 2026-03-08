@@ -18,10 +18,10 @@ pub struct Cli {
 pub enum Commands {
     /// Initialize Nuvix config in a client project directory
     Init(InitArgs),
-    /// Manage self-hosted Nuvix deployment
-    SelfHost {
+    /// Manage local Nuvix deployment
+    Local {
         #[command(subcommand)]
-        command: SelfHostCommand,
+        command: LocalCommand,
     },
     /// Manage global project profiles
     Project {
@@ -57,14 +57,14 @@ pub struct InitArgs {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum SelfHostCommand {
-    /// Initialize self-host config and write .env file
+pub enum LocalCommand {
+    /// Initialize local config and write .env file
     Init(SelfHostInitArgs),
-    /// Start self-hosted services via Docker Compose
+    /// Start local services via Docker Compose
     Up(SelfHostUpArgs),
-    /// Stop self-hosted services
+    /// Stop local services
     Down(SelfHostDownArgs),
-    /// Show current self-host status
+    /// Show current local status
     Status(SelfHostStatusArgs),
 }
 
@@ -181,21 +181,21 @@ pub struct SelfHostUpArgs {
     #[arg(long, default_value_t = true)]
     pub detach: bool,
 
-    /// Target project id from self-host project dictionary
+    /// Target project id from local project dictionary
     #[arg(long)]
     pub project_id: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct SelfHostDownArgs {
-    /// Target project id from self-host project dictionary
+    /// Target project id from local project dictionary
     #[arg(long)]
     pub project_id: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct SelfHostStatusArgs {
-    /// Target project id from self-host project dictionary
+    /// Target project id from local project dictionary
     #[arg(long)]
     pub project_id: Option<String>,
 }
