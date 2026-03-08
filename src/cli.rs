@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -16,6 +16,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Initialize Nuvix config in a client project directory
+    Init(InitArgs),
     /// Manage self-hosted Nuvix deployment
     SelfHost {
         #[command(subcommand)]
@@ -26,6 +28,27 @@ pub enum Commands {
         #[command(subcommand)]
         command: ProjectCommand,
     },
+    /// Authenticate against a Nuvix project profile
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
+    /// Generate client artifacts from Nuvix instance
+    Gen {
+        #[command(subcommand)]
+        command: GenCommand,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct InitArgs {
+    /// Project ID to write into nuvix/config.toml (will prompt if omitted)
+    #[arg(long)]
+    pub project_id: Option<String>,
+
+    /// Overwrite existing nuvix/config.toml if present
+    #[arg(long, default_value_t = false)]
+    pub force: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -48,6 +71,22 @@ pub enum ProjectCommand {
     Use(ProjectUseArgs),
     /// Show profiles or current profile details
     Show(ProjectShowArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AuthCommand {
+    /// Login with email/password and store nc_session
+    Login(AuthLoginArgs),
+    /// Show current auth status for a project profile
+    Status(AuthStatusArgs),
+    /// Remove stored nc_session for a project profile
+    Logout(AuthLogoutArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GenCommand {
+    /// Generate database types and write to file
+    Types(GenTypesArgs),
 }
 
 #[derive(Debug, Args)]
@@ -168,4 +207,63 @@ pub struct ProjectShowArgs {
     pub project_id: Option<String>,
     #[arg(long, default_value_t = false)]
     pub list: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct AuthLoginArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long)]
+    pub email: String,
+    #[arg(long)]
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AuthStatusArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AuthLogoutArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum TypeLanguage {
+    Typescript,
+    Go,
+    Swift,
+}
+
+impl TypeLanguage {
+    pub fn as_endpoint_segment(&self) -> &'static str {
+        match self {
+            Self::Typescript => "typescript",
+            Self::Go => "go",
+            Self::Swift => "swift",
+        }
+    }
+
+    pub fn default_filename(&self) -> &'static str {
+        match self {
+            Self::Typescript => "database.types.ts",
+            Self::Go => "database.types.go",
+            Self::Swift => "DatabaseTypes.swift",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct GenTypesArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long, value_enum)]
+    pub language: TypeLanguage,
+    #[arg(long)]
+    pub output: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub force: bool,
 }

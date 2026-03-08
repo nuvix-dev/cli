@@ -1,4 +1,5 @@
 mod cli;
+mod client;
 mod commands;
 mod config;
 mod global_config;
@@ -6,7 +7,7 @@ mod state;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands, ProjectCommand, SelfHostCommand};
+use cli::{AuthCommand, Cli, Commands, GenCommand, ProjectCommand, SelfHostCommand};
 use std::env;
 use std::path::PathBuf;
 
@@ -22,6 +23,7 @@ fn run() -> Result<()> {
     let project_dir = resolve_project_dir(cli.project_dir)?;
 
     match cli.command {
+        Commands::Init(args) => commands::init_project::run(&project_dir, args),
         Commands::SelfHost { command } => match command {
             SelfHostCommand::Init(args) => commands::self_host::init(&project_dir, args),
             SelfHostCommand::Up(args) => commands::self_host::up(&project_dir, args),
@@ -32,6 +34,14 @@ fn run() -> Result<()> {
             ProjectCommand::SetUrls(args) => commands::project::set_urls(args),
             ProjectCommand::Use(args) => commands::project::use_project(args),
             ProjectCommand::Show(args) => commands::project::show(args),
+        },
+        Commands::Auth { command } => match command {
+            AuthCommand::Login(args) => commands::auth::login(args),
+            AuthCommand::Status(args) => commands::auth::status(args),
+            AuthCommand::Logout(args) => commands::auth::logout(args),
+        },
+        Commands::Gen { command } => match command {
+            GenCommand::Types(args) => commands::typegen::types(&project_dir, args),
         },
     }
 }

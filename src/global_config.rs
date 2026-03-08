@@ -27,6 +27,10 @@ pub struct GlobalProjectProfile {
     pub self_host_docker_dir: Option<PathBuf>,
     #[serde(default)]
     pub self_host_env_file: Option<PathBuf>,
+    #[serde(default)]
+    pub auth_email: Option<String>,
+    #[serde(default)]
+    pub nc_session: Option<String>,
 }
 
 impl GlobalConfig {
