@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -12,6 +12,7 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -19,59 +20,64 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             archive: tar.gz
-            exe: nuvix
+            bin: nuvix
+
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             archive: tar.gz
-            exe: nuvix
+            bin: nuvix
+
           - os: macos-13
             target: x86_64-apple-darwin
             archive: tar.gz
-            exe: nuvix
+            bin: nuvix
+
           - os: macos-14
             target: aarch64-apple-darwin
             archive: tar.gz
-            exe: nuvix
+            bin: nuvix
+
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
-            exe: nuvix.exe
+            bin: nuvix.exe
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Linux musl tools
-        if: startsWith(matrix.target, 'x86_64-unknown-linux-musl') || startsWith(matrix.target, 'aarch64-unknown-linux-musl')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+      - name: Install cross (Linux only)
+        if: runner.os == 'Linux'
+        run: cargo install cross
 
-      - name: Build release binary
+      - name: Build
         shell: bash
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
-      - name: Package artifact (unix)
+      - name: Package (Unix)
         if: matrix.archive == 'tar.gz'
-        shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          cp target/${{ matrix.target }}/release/cli artifacts/${{ matrix.exe }}
-          tar -C artifacts -czf nuvix-${{ matrix.target }}.tar.gz ${{ matrix.exe }}
+          mkdir dist
+          cp target/${{ matrix.target }}/release/${{ matrix.bin }} dist/
+          tar -czf nuvix-${{ matrix.target }}.tar.gz -C dist ${{ matrix.bin }}
 
-      - name: Package artifact (windows)
+      - name: Package (Windows)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/cli.exe" "artifacts/${{ matrix.exe }}"
-          Compress-Archive -Path "artifacts/${{ matrix.exe }}" -DestinationPath "nuvix-${{ matrix.target }}.zip" -Force
+          mkdir dist
+          copy target/${{ matrix.target }}/release/${{ matrix.bin }} dist\
+          Compress-Archive dist\${{ matrix.bin }} nuvix-${{ matrix.target }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -82,54 +88,52 @@ jobs:
             nuvix-${{ matrix.target }}.zip
           if-no-files-found: ignore
 
+
   release:
-    name: Create GitHub Release
+    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: dist
 
-      - name: Prepare release files
+      - name: Prepare files
         run: |
-          set -euo pipefail
-          mkdir -p release
-          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
-          (cd release && sha256sum * > checksums.txt)
+          mkdir release
+          find dist -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release/ \;
+          cd release
+          sha256sum * > checksums.txt
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/*
+          files: release/*
           generate_release_notes: true
 
+
   npm:
-    name: Publish npm package
+    name: Publish npm
     needs: release
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: 20
+          registry-url: https://registry.npmjs.org
 
-      - name: Set npm package version from tag
+      - name: Set version from tag
         working-directory: npm
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           npm version --no-git-tag-version "$TAG"
 
-      - name: Publish to npm
+      - name: Publish
         working-directory: npm
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
