@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 const GLOBAL_CONFIG_DIR: &str = ".config/nuvix";
 const GLOBAL_CONFIG_FILE: &str = "config.toml";
+#[cfg(not(target_env = "musl"))]
+const KEYRING_SERVICE: &str = "nuvix-cli";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GlobalConfig {
@@ -103,7 +105,15 @@ pub fn global_config_path() -> Result<PathBuf> {
         .join(GLOBAL_CONFIG_FILE))
 }
 
-pub fn load_session(_project_id: &str, profile: &GlobalProjectProfile) -> Option<String> {
+fn keyring_user(project_id: &str) -> String {
+    format!("project:{project_id}")
+}
+
+pub fn load_session(project_id: &str, profile: &GlobalProjectProfile) -> Option<String> {
+    if let Some(secret) = keyring_get(project_id) {
+        return Some(secret);
+    }
+
     profile
         .nc_session
         .as_ref()
@@ -112,6 +122,10 @@ pub fn load_session(_project_id: &str, profile: &GlobalProjectProfile) -> Option
 }
 
 pub fn store_session(project_id: &str, session: &str) -> Result<()> {
+    if keyring_set(project_id, session) {
+        return Ok(());
+    }
+
     let mut global = GlobalConfig::load_or_default()?;
     let profile = global
         .projects
@@ -122,9 +136,51 @@ pub fn store_session(project_id: &str, session: &str) -> Result<()> {
 }
 
 pub fn clear_session(project_id: &str) -> Result<()> {
+    keyring_delete(project_id);
+
     let mut global = GlobalConfig::load_or_default()?;
     if let Some(profile) = global.projects.get_mut(project_id) {
         profile.nc_session = None;
     }
     global.save()
 }
+
+#[cfg(not(target_env = "musl"))]
+fn keyring_get(project_id: &str) -> Option<String> {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &keyring_user(project_id)) {
+        if let Ok(secret) = entry.get_password() {
+            if !secret.trim().is_empty() {
+                return Some(secret);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_env = "musl")]
+fn keyring_get(_project_id: &str) -> Option<String> {
+    None
+}
+
+#[cfg(not(target_env = "musl"))]
+fn keyring_set(project_id: &str, session: &str) -> bool {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &keyring_user(project_id)) {
+        return entry.set_password(session).is_ok();
+    }
+    false
+}
+
+#[cfg(target_env = "musl")]
+fn keyring_set(_project_id: &str, _session: &str) -> bool {
+    false
+}
+
+#[cfg(not(target_env = "musl"))]
+fn keyring_delete(project_id: &str) {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &keyring_user(project_id)) {
+        let _ = entry.delete_credential();
+    }
+}
+
+#[cfg(target_env = "musl")]
+fn keyring_delete(_project_id: &str) {}
