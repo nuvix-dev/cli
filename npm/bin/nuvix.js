@@ -7,7 +7,7 @@ const exe = process.platform === 'win32' ? 'nuvix.exe' : 'nuvix';
 const binPath = path.join(__dirname, '..', 'dist', exe);
 
 if (!fs.existsSync(binPath)) {
-  console.error('nuvix binary is missing. Reinstall package: npm i -g nuvix-cli');
+  console.error('nuvix binary is missing. Reinstall package: npm i -g nuvix');
   process.exit(1);
 }
 

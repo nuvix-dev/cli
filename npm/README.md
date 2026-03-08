@@ -5,7 +5,7 @@ Nuvix CLI npm wrapper package.
 ## Install
 
 ```bash
-npm i -g nuvix-cli
+npm i -g nuvix
 ```
 
 ## Use

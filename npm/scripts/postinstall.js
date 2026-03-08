@@ -6,7 +6,7 @@ const { execFileSync } = require('child_process');
 
 const pkg = require('../package.json');
 const version = pkg.version;
-const repo = process.env.NUVIX_CLI_REPO || 'Nuvix-dev/cli';
+const repo = process.env.NUVIX_CLI_REPO || 'nuvix-dev/cli';
 const tag = `v${version}`;
 
 const map = {

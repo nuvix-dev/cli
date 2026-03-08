@@ -1,5 +1,5 @@
 {
-  "name": "nuvix-cli",
+  "name": "nuvix",
   "version": "0.1.0",
   "description": "Nuvix CLI binary wrapper",
   "license": "MIT",
