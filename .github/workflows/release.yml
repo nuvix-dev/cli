@@ -60,16 +60,12 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo install cross
 
-      - name: Set OpenSSL static for MUSL
-        if: runner.os == 'Linux'
-        run: echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-
       - name: Build
         shell: bash
+        env:
+          CROSS_CONTAINER_OPTS: "--env OPENSSL_VENDORED=1"
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            unset OPENSSL_DIR
-            unset PKG_CONFIG_PATH
             cross build --release --target ${{ matrix.target }}
           else
             cargo build --release --target ${{ matrix.target }}
