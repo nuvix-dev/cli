@@ -7,7 +7,9 @@ mod state;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{AuthCommand, Cli, Commands, GenCommand, ProjectCommand, SelfHostCommand};
+use cli::{
+    AuthCommand, Cli, Commands, GenCommand, MigrationCommand, ProjectCommand, SelfHostCommand,
+};
 use std::env;
 use std::path::PathBuf;
 
@@ -42,6 +44,12 @@ fn run() -> Result<()> {
         },
         Commands::Gen { command } => match command {
             GenCommand::Types(args) => commands::typegen::types(&project_dir, args),
+        },
+        Commands::Migration { command } => match command {
+            MigrationCommand::New(args) => commands::migration::new_migration(&project_dir, args),
+            MigrationCommand::Pull(args) => commands::migration::pull(&project_dir, args),
+            MigrationCommand::Up(args) => commands::migration::up(&project_dir, args),
+            MigrationCommand::Status(args) => commands::migration::status(&project_dir, args),
         },
     }
 }

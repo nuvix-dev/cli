@@ -38,6 +38,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: GenCommand,
     },
+    /// Manage SQL migrations
+    Migration {
+        #[command(subcommand)]
+        command: MigrationCommand,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -87,6 +92,18 @@ pub enum AuthCommand {
 pub enum GenCommand {
     /// Generate database types and write to file
     Types(GenTypesArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MigrationCommand {
+    /// Create a new migration SQL file
+    New(MigrationNewArgs),
+    /// Pull remote schema snapshot (managed + unmanaged)
+    Pull(MigrationPullArgs),
+    /// Apply pending migrations to database
+    Up(MigrationUpArgs),
+    /// Show migration status
+    Status(MigrationStatusArgs),
 }
 
 #[derive(Debug, Args)]
@@ -266,4 +283,42 @@ pub struct GenTypesArgs {
     pub output: Option<PathBuf>,
     #[arg(long, default_value_t = false)]
     pub force: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct MigrationNewArgs {
+    #[arg(long)]
+    pub name: String,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct MigrationUpArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long)]
+    pub database_url: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct MigrationStatusArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long)]
+    pub database_url: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct MigrationPullArgs {
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long)]
+    pub database_url: Option<String>,
+    #[arg(long)]
+    pub output: Option<PathBuf>,
 }

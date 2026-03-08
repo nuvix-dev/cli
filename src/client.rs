@@ -34,7 +34,7 @@ impl NuvixClient {
         let client = Client::builder()
             .build()
             .context("failed to initialize HTTP client")?;
-        let url = format!("{}/sessions/email", base_url.trim_end_matches('/'));
+        let url = format!("{}/account/sessions/email", base_url.trim_end_matches('/'));
 
         let response = client
             .post(url)
