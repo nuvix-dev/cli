@@ -9,7 +9,7 @@ pub fn run(project_dir: &Path, url: String, token: String) -> Result<()> {
         url: url.clone(),
         token,
     });
-    cfg.save_to(project_dir, true)?;
+    cfg.save(project_dir)?;
 
     println!("Linked project '{}' to {}", cfg.project.name, url);
 

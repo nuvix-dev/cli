@@ -8,7 +8,8 @@ mod state;
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    AuthCommand, Cli, Commands, GenCommand, LocalCommand, MigrationCommand, ProjectCommand,
+    AuthCommand, Cli, CollectionsCommand, Commands, GenCommand, LocalCommand, MigrationCommand,
+    ProjectCommand,
 };
 use std::env;
 use std::path::PathBuf;
@@ -50,6 +51,28 @@ fn run() -> Result<()> {
             MigrationCommand::Pull(args) => commands::migration::pull(&project_dir, args),
             MigrationCommand::Up(args) => commands::migration::up(&project_dir, args),
             MigrationCommand::Status(args) => commands::migration::status(&project_dir, args),
+        },
+        Commands::Collections { command } => match command {
+            CollectionsCommand::Init(args) => commands::collections::init(&project_dir, args),
+            CollectionsCommand::List(args) => commands::collections::list(&project_dir, args),
+            CollectionsCommand::Show(args) => commands::collections::show(&project_dir, args),
+            CollectionsCommand::AddCollection(args) => {
+                commands::collections::add_collection(&project_dir, args)
+            }
+            CollectionsCommand::RemoveCollection(args) => {
+                commands::collections::remove_collection(&project_dir, args)
+            }
+            CollectionsCommand::AddAttribute(args) => {
+                commands::collections::add_attribute(&project_dir, args)
+            }
+            CollectionsCommand::AddIndex(args) => {
+                commands::collections::add_index(&project_dir, args)
+            }
+            CollectionsCommand::Pull(args) => commands::collections::pull(&project_dir, args),
+            CollectionsCommand::Push(args) => commands::collections::push(&project_dir, args),
+            CollectionsCommand::Validate(args) => {
+                commands::collections::validate(&project_dir, args)
+            }
         },
     }
 }

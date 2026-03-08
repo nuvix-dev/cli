@@ -1,6 +1,6 @@
 use crate::cli::{AuthLoginArgs, AuthLogoutArgs, AuthStatusArgs};
 use crate::client;
-use crate::global_config::GlobalConfig;
+use crate::global_config::{GlobalConfig, clear_session, load_session, store_session};
 use anyhow::{Context, Result, bail};
 use dialoguer::Password;
 
@@ -22,9 +22,10 @@ pub fn login(args: AuthLoginArgs) -> Result<()> {
     let nc_session = client::NuvixClient::login_email(&console_api_url, &args.email, &password)?;
 
     profile.auth_email = Some(args.email);
-    profile.nc_session = Some(nc_session);
+    profile.nc_session = None;
     global.current_project_id = Some(project_id.clone());
     global.save()?;
+    store_session(&project_id, &nc_session)?;
 
     println!("Login successful for project '{}'.", project_id);
     Ok(())
@@ -39,11 +40,7 @@ pub fn status(args: AuthStatusArgs) -> Result<()> {
         .get(&project_id)
         .with_context(|| format!("project profile '{}' not found", project_id))?;
 
-    let has_session = profile
-        .nc_session
-        .as_ref()
-        .map(|v| !v.is_empty())
-        .unwrap_or(false);
+    let has_session = load_session(&project_id, profile).is_some();
     println!("Project: {}", project_id);
     println!("Authenticated: {}", has_session);
     println!(
@@ -63,12 +60,12 @@ pub fn logout(args: AuthLogoutArgs) -> Result<()> {
         .get_mut(&project_id)
         .with_context(|| format!("project profile '{}' not found", project_id))?;
 
-    if profile.nc_session.is_none() {
+    if load_session(&project_id, profile).is_none() {
         bail!("no active session stored for project '{}'", project_id);
     }
-
     profile.nc_session = None;
     global.save()?;
+    clear_session(&project_id)?;
 
     println!("Logged out from project '{}'.", project_id);
     Ok(())

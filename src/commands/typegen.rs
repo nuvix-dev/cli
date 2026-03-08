@@ -1,6 +1,6 @@
 use crate::cli::GenTypesArgs;
 use crate::client::{NuvixClient, ensure_console_url};
-use crate::global_config::GlobalConfig;
+use crate::global_config::{GlobalConfig, load_session};
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,11 +13,7 @@ pub fn types(project_dir: &Path, args: GenTypesArgs) -> Result<()> {
         .get(&project_id)
         .with_context(|| format!("project profile '{}' not found", project_id))?;
 
-    let session = profile
-        .nc_session
-        .as_ref()
-        .filter(|v| !v.is_empty())
-        .cloned()
+    let session = load_session(&project_id, profile)
         .context("missing nc_session. Run `nuvix auth login` first")?;
 
     let console_url = ensure_console_url(profile)?;

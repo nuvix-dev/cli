@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 const GLOBAL_CONFIG_DIR: &str = ".config/nuvix";
 const GLOBAL_CONFIG_FILE: &str = "config.toml";
+const KEYRING_SERVICE: &str = "nuvix-cli";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GlobalConfig {
@@ -80,8 +81,73 @@ impl GlobalConfig {
 }
 
 pub fn global_config_path() -> Result<PathBuf> {
-    let home = std::env::var("HOME").context("HOME is not set")?;
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        if !xdg.trim().is_empty() {
+            return Ok(Path::new(&xdg).join("nuvix").join(GLOBAL_CONFIG_FILE));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(app_data) = std::env::var("APPDATA") {
+            if !app_data.trim().is_empty() {
+                return Ok(Path::new(&app_data).join("nuvix").join(GLOBAL_CONFIG_FILE));
+            }
+        }
+    }
+
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .context("HOME/USERPROFILE is not set")?;
     Ok(Path::new(&home)
         .join(GLOBAL_CONFIG_DIR)
         .join(GLOBAL_CONFIG_FILE))
+}
+
+fn keyring_user(project_id: &str) -> String {
+    format!("project:{project_id}")
+}
+
+pub fn load_session(project_id: &str, profile: &GlobalProjectProfile) -> Option<String> {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &keyring_user(project_id)) {
+        if let Ok(secret) = entry.get_password() {
+            if !secret.trim().is_empty() {
+                return Some(secret);
+            }
+        }
+    }
+
+    profile
+        .nc_session
+        .as_ref()
+        .filter(|v| !v.trim().is_empty())
+        .cloned()
+}
+
+pub fn store_session(project_id: &str, session: &str) -> Result<()> {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &keyring_user(project_id)) {
+        if entry.set_password(session).is_ok() {
+            return Ok(());
+        }
+    }
+
+    let mut global = GlobalConfig::load_or_default()?;
+    let profile = global
+        .projects
+        .entry(project_id.to_string())
+        .or_insert_with(GlobalProjectProfile::default);
+    profile.nc_session = Some(session.to_string());
+    global.save()
+}
+
+pub fn clear_session(project_id: &str) -> Result<()> {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &keyring_user(project_id)) {
+        let _ = entry.delete_credential();
+    }
+
+    let mut global = GlobalConfig::load_or_default()?;
+    if let Some(profile) = global.projects.get_mut(project_id) {
+        profile.nc_session = None;
+    }
+    global.save()
 }

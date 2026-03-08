@@ -86,6 +86,7 @@ impl ProjectConfig {
             .with_context(|| format!("failed to parse config file: {}", config_path.display()))
     }
 
+    #[allow(dead_code)]
     pub fn save_to(&self, project_dir: &Path, force: bool) -> Result<()> {
         let config_path = project_dir.join(CONFIG_FILE);
 
@@ -96,6 +97,13 @@ impl ProjectConfig {
             );
         }
 
+        let raw = toml::to_string_pretty(self).context("failed to serialize config")?;
+        fs::write(&config_path, raw)
+            .with_context(|| format!("failed to write config file: {}", config_path.display()))
+    }
+
+    pub fn save(&self, project_dir: &Path) -> Result<()> {
+        let config_path = project_dir.join(CONFIG_FILE);
         let raw = toml::to_string_pretty(self).context("failed to serialize config")?;
         fs::write(&config_path, raw)
             .with_context(|| format!("failed to write config file: {}", config_path.display()))

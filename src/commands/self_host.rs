@@ -106,7 +106,7 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
     self_host.docker_dir = None;
     self_host.env_file = None;
 
-    cfg.save_to(project_dir, true)?;
+    cfg.save(project_dir)?;
     register_global_project_profile(&project_id, &docker_dir, &env_file, &env_values)?;
 
     let mut state = CliState::load_or_default(project_dir)?;
@@ -493,6 +493,16 @@ fn env_values_from_interactive(
     vars.insert("NUVIX_REDIS_PASSWORD".to_string(), redis_password);
     vars.insert("NUVIX_JWT_SECRET".to_string(), jwt_secret);
     vars.insert("NUVIX_ENCRYPTION_KEY".to_string(), encryption_key);
+    vars.insert(
+        "NUVIX_REDIS_HOST".to_string(),
+        args.redis_host
+            .clone()
+            .unwrap_or_else(|| "redis".to_string()),
+    );
+    vars.insert(
+        "NUVIX_REDIS_PORT".to_string(),
+        args.redis_port.unwrap_or(6379).to_string(),
+    );
 
     Ok(vars)
 }
@@ -654,6 +664,7 @@ fn write_aligned_env_file(
 
 fn merge_template_with_overrides(template: &str, overrides: &BTreeMap<String, String>) -> String {
     let mut output = Vec::new();
+    let mut seen_keys = HashSet::new();
 
     for line in template.lines() {
         let trimmed = line.trim();
@@ -664,6 +675,7 @@ fn merge_template_with_overrides(template: &str, overrides: &BTreeMap<String, St
 
         if let Some((key, _value)) = line.split_once('=') {
             let key = key.trim();
+            seen_keys.insert(key.to_string());
             if let Some(new_value) = overrides.get(key) {
                 output.push(format!("{}={}", key, format_env_value(new_value)));
                 continue;
@@ -671,6 +683,12 @@ fn merge_template_with_overrides(template: &str, overrides: &BTreeMap<String, St
         }
 
         output.push(line.to_string());
+    }
+
+    for (key, value) in overrides {
+        if !seen_keys.contains(key) {
+            output.push(format!("{}={}", key, format_env_value(value)));
+        }
     }
 
     output.push(String::new());

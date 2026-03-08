@@ -43,6 +43,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: MigrationCommand,
     },
+    /// Manage document schemas and collections
+    #[command(alias = "collection")]
+    Collections {
+        #[command(subcommand)]
+        command: CollectionsCommand,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -104,6 +110,30 @@ pub enum MigrationCommand {
     Up(MigrationUpArgs),
     /// Show migration status
     Status(MigrationStatusArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CollectionsCommand {
+    /// Create a new document schema JSON file
+    Init(CollectionsInitArgs),
+    /// List document schema files
+    List(CollectionsListArgs),
+    /// Print a schema JSON file
+    Show(CollectionsShowArgs),
+    /// Add a collection in a schema file
+    AddCollection(CollectionsAddCollectionArgs),
+    /// Remove a collection from a schema file
+    RemoveCollection(CollectionsRemoveCollectionArgs),
+    /// Add an attribute to a collection
+    AddAttribute(CollectionsAddAttributeArgs),
+    /// Add an index to a collection
+    AddIndex(CollectionsAddIndexArgs),
+    /// Pull collections/attributes/indexes from remote schema
+    Pull(CollectionsPullArgs),
+    /// Push local schema file to remote document schema
+    Push(CollectionsPushArgs),
+    /// Validate one or all schema files
+    Validate(CollectionsValidateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -321,4 +351,209 @@ pub struct MigrationPullArgs {
     pub database_url: Option<String>,
     #[arg(long)]
     pub output: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum DocumentAttributeType {
+    String,
+    Integer,
+    Float,
+    Boolean,
+    Datetime,
+    Timestamptz,
+    Email,
+    Url,
+    Ip,
+    Enum,
+    Relationship,
+}
+
+impl DocumentAttributeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::String => "string",
+            Self::Integer => "integer",
+            Self::Float => "float",
+            Self::Boolean => "boolean",
+            Self::Datetime => "datetime",
+            Self::Timestamptz => "timestamptz",
+            Self::Email => "email",
+            Self::Url => "url",
+            Self::Ip => "ip",
+            Self::Enum => "enum",
+            Self::Relationship => "relationship",
+        }
+    }
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum DocumentIndexType {
+    Key,
+    Unique,
+    Fulltext,
+}
+
+impl DocumentIndexType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Key => "key",
+            Self::Unique => "unique",
+            Self::Fulltext => "fulltext",
+        }
+    }
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum IndexOrder {
+    Asc,
+    Desc,
+}
+
+impl IndexOrder {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Asc => "ASC",
+            Self::Desc => "DESC",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsInitArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub force: bool,
+    #[arg(long, default_value_t = false)]
+    pub non_interactive: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsListArgs {
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsShowArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsAddCollectionArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub non_interactive: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsRemoveCollectionArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsAddAttributeArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub collection: Option<String>,
+    #[arg(long)]
+    pub key: Option<String>,
+    #[arg(long, value_enum)]
+    pub attribute_type: Option<DocumentAttributeType>,
+    #[arg(long, default_value_t = false)]
+    pub required: bool,
+    #[arg(long, default_value_t = false)]
+    pub array: bool,
+    #[arg(long)]
+    pub size: Option<u32>,
+    #[arg(long)]
+    pub default: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    pub elements: Vec<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub non_interactive: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsAddIndexArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub collection: Option<String>,
+    #[arg(long)]
+    pub key: Option<String>,
+    #[arg(long, value_enum)]
+    pub index_type: Option<DocumentIndexType>,
+    #[arg(long, value_delimiter = ',')]
+    pub attributes: Vec<String>,
+    #[arg(long, value_enum, value_delimiter = ',')]
+    pub orders: Vec<IndexOrder>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub non_interactive: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsValidateArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsPullArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub non_interactive: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionsPushArgs {
+    #[arg(long)]
+    pub schema: Option<String>,
+    #[arg(long)]
+    pub project_id: Option<String>,
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub non_interactive: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+    #[arg(long, default_value_t = false)]
+    pub dry_run: bool,
 }

@@ -100,6 +100,14 @@ pub fn ensure_console_api_url(
     )
 }
 
+pub fn ensure_api_url(profile: &crate::global_config::GlobalProjectProfile) -> Result<String> {
+    if let Some(url) = &profile.api_url {
+        return Ok(url.clone());
+    }
+
+    bail!("project profile is missing api_url. Set it with `nuvix project set-urls`")
+}
+
 pub fn ensure_console_url(profile: &crate::global_config::GlobalProjectProfile) -> Result<String> {
     if let Some(url) = &profile.console_url {
         return Ok(url.clone());
