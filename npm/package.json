@@ -1,0 +1,25 @@
+{
+  "name": "nuvix-cli",
+  "version": "0.1.0",
+  "description": "Nuvix CLI binary wrapper",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nuvix-dev/cli.git"
+  },
+  "bin": {
+    "nuvix": "bin/nuvix.js"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
