@@ -8,6 +8,12 @@ Nuvix CLI npm wrapper package.
 npm i -g nuvix
 ```
 
+Direct install from GitHub Releases:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Nuvix-dev/cli/main/install.sh | bash
+```
+
 ## Use
 
 ```bash
