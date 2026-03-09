@@ -16,6 +16,8 @@ const DEFAULT_DOCKER_DIR: &str = "docker";
 const DEFAULT_ENV_FILE_NAME: &str = ".env";
 const DEFAULT_EXAMPLE_FILE_NAME: &str = ".env.example";
 const DEFAULT_DOCKER_REPO: &str = "https://github.com/Nuvix-dev/docker";
+const DEFAULT_COMPOSE_FILE_YML: &str = "docker-compose.yml";
+const DEFAULT_COMPOSE_FILE_YAML: &str = "docker-compose.yaml";
 const DEFAULT_API_PORT: u16 = 4000;
 const DEFAULT_CONSOLE_API_PORT: u16 = 4100;
 const DEFAULT_CONSOLE_PORT: u16 = 3000;
@@ -56,7 +58,7 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
         pull_docker_repo_if_git(&docker_dir)?;
     }
 
-    let env_values = if args.non_interactive {
+    let mut env_values = if args.non_interactive {
         env_values_from_non_interactive(&cfg, &args)?
     } else {
         env_values_from_interactive(&cfg, &args)?
@@ -66,6 +68,7 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
         .get("NUVIX_PROJECT_ID")
         .cloned()
         .context("missing NUVIX_PROJECT_ID in computed env values")?;
+    env_values.insert("NUVIX_PROJECT_ID".to_string(), project_id.clone());
 
     let existing_env_file = cfg
         .self_host
@@ -87,6 +90,7 @@ pub fn init(project_dir: &Path, args: SelfHostInitArgs) -> Result<()> {
     );
 
     write_aligned_env_file(&docker_dir, &env_file, &env_values, args.force)?;
+    sync_compose_project_name(&docker_dir, &project_id)?;
 
     let self_host = cfg.self_host.get_or_insert(SelfHostSection {
         default_project_id: None,
@@ -660,6 +664,65 @@ fn write_aligned_env_file(
 
     fs::write(env_file, content)
         .with_context(|| format!("failed to write env file: {}", env_file.display()))
+}
+
+fn sync_compose_project_name(docker_dir: &Path, project_id: &str) -> Result<()> {
+    let compose_path = if docker_dir.join(DEFAULT_COMPOSE_FILE_YML).exists() {
+        docker_dir.join(DEFAULT_COMPOSE_FILE_YML)
+    } else if docker_dir.join(DEFAULT_COMPOSE_FILE_YAML).exists() {
+        docker_dir.join(DEFAULT_COMPOSE_FILE_YAML)
+    } else {
+        return Ok(());
+    };
+
+    let project_name = compose_project_name(project_id);
+    let raw = fs::read_to_string(&compose_path)
+        .with_context(|| format!("failed to read compose file: {}", compose_path.display()))?;
+
+    let mut lines = Vec::new();
+    let mut replaced = false;
+    for line in raw.lines() {
+        if !replaced && line.trim_start().starts_with("name:") {
+            lines.push(format!("name: {}", project_name));
+            replaced = true;
+            continue;
+        }
+        lines.push(line.to_string());
+    }
+
+    if !replaced {
+        lines.insert(0, String::new());
+        lines.insert(0, format!("name: {}", project_name));
+    }
+
+    let mut out = lines.join("\n");
+    out.push('\n');
+    fs::write(&compose_path, out)
+        .with_context(|| format!("failed to write compose file: {}", compose_path.display()))?;
+    Ok(())
+}
+
+fn compose_project_name(project_id: &str) -> String {
+    let normalized = project_id
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches(|c: char| !c.is_ascii_alphanumeric())
+        .to_string();
+
+    if normalized.is_empty() {
+        "nuvix".to_string()
+    } else {
+        normalized
+    }
 }
 
 fn merge_template_with_overrides(template: &str, overrides: &BTreeMap<String, String>) -> String {
